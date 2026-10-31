@@ -1,1 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talk to Anything</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a drafting table. Wide drawing board on the left, narration and "change something" controls on the right; stacked on phones. */
+:root{
+  --paper:#edf0f4; --panel:#f8fafc; --ink:#0f2740; --muted:#4d6279; --line:#aebdce; --grid:#dbe3ec;
+  --accent:#d9480f; --hot:#c2410c; --cold:#1d6fb8; --good:#2f7d4f;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0b1d33; --panel:#102743; --ink:#e8f0f8; --muted:#9db2c9; --line:#3d5d82; --grid:#16304f;
+    --accent:#ffb020; --hot:#ff8a4c; --cold:#62b0ff; --good:#6fd39a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0b1d33; --panel:#102743; --ink:#e8f0f8; --muted:#9db2c9; --line:#3d5d82; --grid:#16304f;
+  --accent:#ffb020; --hot:#ff8a4c; --cold:#62b0ff; --good:#6fd39a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.5 var(--f-display);
+  padding-block:22px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.02em;line-height:1.05;text-wrap:balance}
+.sub{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.mono{font-family:var(--f-mono)}
+form#ask{display:flex;gap:8px;flex-wrap:wrap}
+input#q{flex:1 1 260px;min-width:0;padding:13px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+input#q:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer}
+.btn{padding:12px 18px;border-radius:10px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:600}
+.btn.alt{background:transparent;color:var(--ink);border-color:var(--line)}
+.label{font:500 11px/1 var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:14px;transition:border-color .2s,background .2s}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel));font-weight:600}
+.chip.pulse{animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}50%{box-shadow:0 0 0 7px transparent}}
+.cols{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.cols{grid-template-columns:minmax(0,1fr)}}
+.board{border:1.5px solid var(--line);border-radius:14px;background:var(--panel);padding:14px;min-width:0}
+.boardhead{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}
+.boardhead h2{margin:0;font-size:20px;font-weight:600;text-wrap:balance}
+.tag{font:500 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+.stage{border-radius:10px;border:1px solid var(--line);min-height:300px;overflow-x:auto;display:grid;place-items:center;padding:10px;
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+.stage>*{width:100%}
+svg{display:block;height:auto;min-width:540px;width:100%}
+select#voice{flex:1 1 150px;min-width:0;padding:10px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
+#hint a{color:var(--accent);font-weight:600}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+#caption{margin:0;font-size:20px;line-height:1.4;min-height:84px;text-wrap:pretty}
+.ctl{display:flex;gap:8px;flex-wrap:wrap}
+.note{margin:0;font-size:13px;color:var(--muted);min-height:18px}
+.note.warn{color:var(--hot)}
+#hint{margin:0;font-size:14px;color:var(--muted)}
+.el{cursor:pointer;transition:opacity .25s}
+#stage.dim .el:not(.on){opacity:.28}
+#stage.dim .edge:not(.on),#stage.dim .dot:not(.on){opacity:.12}
 
+/* diagram */
+.node{transform-box:fill-box;transform-origin:center;animation:pop .45s var(--d,0s) backwards}
+.node rect{fill:var(--panel);stroke:var(--line);stroke-width:1.6;transition:all .25s}
+.node text{fill:var(--ink);font-size:14px;font-weight:600;text-anchor:middle;pointer-events:none}
+.node.hot rect{stroke:var(--hot);fill:color-mix(in srgb,var(--hot) 12%,var(--panel))}
+.node.cold rect{stroke:var(--cold);fill:color-mix(in srgb,var(--cold) 12%,var(--panel))}
+.node.dead{opacity:.38}
+.node.dead rect{stroke-dasharray:4 4}
+.node.on rect{stroke:var(--accent);stroke-width:3.2;fill:color-mix(in srgb,var(--accent) 18%,var(--panel))}
+.edge{stroke:var(--muted);stroke-width:2;fill:none;animation:draw .6s var(--d,0s) backwards}
+.edge.dead{stroke-dasharray:3 6;opacity:.4}
+.edge.on{stroke:var(--accent);stroke-width:3.2}
+.dot{fill:var(--accent);opacity:.75;transition:opacity .25s}
+.dot.on{opacity:1}
+.elabel{font:500 12px var(--f-mono);fill:var(--muted);text-anchor:middle;paint-order:stroke;stroke:var(--paper);stroke-width:5px}
+@keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+@keyframes draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
+
+/* tiles, table, timeline, bars */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.tile{background:var(--panel);border:1.5px solid var(--line);border-radius:10px;padding:12px;animation:rise .4s backwards}
+.tile b{display:block}.tile span{color:var(--muted);font-size:14px}
+.tile.on,.tl-item.on,.bar-row.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+table{width:100%;border-collapse:collapse;background:var(--panel);font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr.el{animation:rise .4s backwards}
+tr.on td{background:color-mix(in srgb,var(--accent) 18%,var(--panel))}
+.tl{display:flex;flex-direction:column;gap:6px}
+.tl-item{display:flex;gap:12px;padding:9px 12px;border-radius:10px;border:1.5px solid transparent;background:var(--panel);animation:rise .4s var(--d,0s) backwards}
+.tl-item .yr{font:500 14px var(--f-mono);min-width:48px;color:var(--accent)}
+.tl-item small{display:block;color:var(--muted);font-size:14px}
+.bar-row{display:grid;grid-template-columns:90px 1fr 70px;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;border:1.5px solid transparent;background:var(--panel)}
+.bar-track{background:var(--grid);border-radius:6px;height:22px;overflow:hidden}
+.bar-fill{height:100%;background:var(--muted);border-radius:6px;transition:width .8s cubic-bezier(.2,.7,.2,1),background .25s}
+.bar-row.on .bar-fill{background:var(--accent)}
+.bar-val{font:500 13px var(--f-mono);text-align:right;color:var(--muted)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Talk to Anything</h1>
+    <p class="sub">Ask a question and watch it get drawn. Then change something and see what happens.</p>
+  </header>
+
+  <form id="ask" autocomplete="off">
+    <input id="q" type="text" placeholder="Ask anything, like why is the sky blue?" aria-label="Your question">
+    <button class="btn" type="submit">Draw it</button>
+    <button class="btn alt" id="mic" type="button" hidden>Speak</button>
+  </form>
+
+  <div>
+    <p class="label">Or start from one of these</p>
+    <div class="chips" id="topics"></div>
+  </div>
+
+  <div class="cols">
+    <section class="board" aria-labelledby="stageTitle">
+      <div class="boardhead"><h2 id="stageTitle">Loading…</h2><span class="tag" id="kind"></span></div>
+      <div class="stage" id="stage"></div>
+    </section>
+    <aside class="side">
+      <p id="caption" aria-live="polite"></p>
+      <div class="ctl">
+        <button class="btn alt" id="sound" type="button" aria-pressed="false">Sound off</button>
+        <button class="btn alt" id="replay" type="button">Replay</button>
+      </div>
+      <div class="ctl"><select id="voice" aria-label="Voice"></select><button class="btn alt" id="testvoice" type="button">Test voice</button></div>
+      <div id="whatwrap" hidden>
+        <p class="label">Change something</p>
+        <div class="chips" id="whatifs"></div>
+      </div>
+      <p id="hint" hidden></p>
+      <p class="note" id="note" role="status"></p>
+      <p class="note" id="engine"></p>
+      <button class="btn alt" id="keybtn" type="button" hidden>Use my Claude API key (fastest)</button>
+      <button class="btn alt" id="smart" type="button" hidden>Retry the on-device model (about 1 GB, one time)</button>
+    </aside>
+  </div>
+</div>
+
+<script>
+/*LOGIC_START*/
+/* ---------- parsing and cleaning model output ---------- */
+const TYPES=["diagram","table","cards","timeline","bars"];
+const SYSTEM=`You are a friendly tutor who explains things visually. For the question below, choose the best visual and narrate it in short spoken steps.
+Reply with ONLY a JSON object with keys in this order: title, type, items, links, columns, rows, steps.
+type is one of:
+- "diagram": parts, processes or relationships. Use items (nodes) and links (arrows between item ids, optional short label).
+- "table": comparisons. Use columns and rows (each row has id and cells matching the columns).
+- "cards": a set of things or objects. Use items with label and a short detail.
+- "timeline": ordered stages or history. Use items in order, with label and detail.
+- "bars": numeric comparison. Use items with label and numeric value.
+Rules: ids are short ("a","b","c"). Labels under 4 words. Details under 12 words. At most 8 items or rows. Omit fields you don't use. Put "steps" last.
+steps: 3 to 5 steps. Each "say" is one plain spoken sentence under 25 words. "focus" lists the ids of the items (or row ids) discussed in that step.
+Example for "how does a kettle work":
+{"title":"How a kettle works","type":"diagram","items":[{"id":"a","label":"Power socket","detail":"Supplies mains electricity."},{"id":"b","label":"Heating element"},{"id":"c","label":"Water"},{"id":"d","label":"Thermostat"}],"links":[{"from":"a","to":"b","label":"current"},{"from":"b","to":"c","label":"heat"},{"from":"c","to":"d","label":"steam"}],"steps":[{"say":"Mains current flows into the heating element.","focus":["a","b"]},{"say":"The element heats the water until it boils.","focus":["b","c"]},{"say":"Steam trips the thermostat, which cuts the power.","focus":["c","d"]}]}`;
+function parseModel(raw){
+  if(raw && typeof raw==="object") return raw;
+  const a=raw.indexOf("{"), b=raw.lastIndexOf("}");
+  if(a<0||b<=a) throw new Error("no JSON in reply");
+  return JSON.parse(raw.slice(a,b+1));
+}
+const str=v=>(v==null?"":String(v)).trim();
+function sanitize(p){
+  if(!p||typeof p!=="object") return null;
+  let type=TYPES.includes(p.type)?p.type:"cards";
+  const seen=new Set();
+  const uid=(raw,pre,i)=>{ let id=str(raw)||pre+i; while(seen.has(id)) id+="_"; seen.add(id); return id; };
+  const items=(Array.isArray(p.items)?p.items:[]).filter(i=>i&&str(i.label)).slice(0,10)
+    .map((i,ix)=>({id:uid(i.id,"i",ix),label:str(i.label),detail:str(i.detail),value:Number.isFinite(+i.value)&&i.value!==""&&i.value!=null?+i.value:null}));
+  const itemIds=new Set(items.map(i=>i.id));
+  const links=(Array.isArray(p.links)?p.links:[]).filter(l=>l&&itemIds.has(str(l.from))&&itemIds.has(str(l.to))&&str(l.from)!==str(l.to))
+    .slice(0,16).map(l=>({from:str(l.from),to:str(l.to),label:str(l.label)}));
+  const columns=(Array.isArray(p.columns)?p.columns:[]).map(str).filter(Boolean).slice(0,5);
+  const rows=(Array.isArray(p.rows)?p.rows:[]).filter(r=>r&&Array.isArray(r.cells)&&r.cells.length).slice(0,8)
+    .map((r,ix)=>({id:uid(r.id,"r",ix),cells:r.cells.map(str)}));
+  if(type==="diagram"&&items.length<2) type=items.length?"cards":type;
+  if(type==="table"&&!rows.length) type="cards";
+  if(type==="bars"&&!items.some(i=>i.value!=null)) type="cards";
+  if(!items.length&&!rows.length) return null;
+  const valid=new Set([...items.map(i=>i.id),...rows.map(r=>r.id)]);
+  let steps=(Array.isArray(p.steps)?p.steps:[]).filter(s=>s&&str(s.say))
+    .map(s=>({say:str(s.say),focus:(Array.isArray(s.focus)?s.focus:[]).map(str).filter(f=>valid.has(f))}));
+  if(!steps.length) steps=[{say:str(p.title)||"Here is what I found.",focus:[]}];
+  return {title:str(p.title),type,items,links,columns,rows,steps};
+}
+/* read a growing JSON reply: pull out arrays element by element */
+function scanArray(t,key){
+  const m=new RegExp('"'+key+'"\\s*:\\s*\\[').exec(t);
+  if(!m) return {items:[],closed:false};
+  let i=m.index+m[0].length, depth=0, inStr=false, esc=false, start=-1; const out=[];
+  for(;i<t.length;i++){
+    const c=t[i];
+    if(inStr){ if(esc) esc=false; else if(c==="\\") esc=true; else if(c==='"') inStr=false; continue; }
+    if(c==='"'){ inStr=true; continue; }
+    if(c==="{"){ if(depth===0) start=i; depth++; }
+    else if(c==="}"){ depth--; if(depth===0&&start>=0){ try{ out.push(JSON.parse(t.slice(start,i+1))); }catch(e){} start=-1; } }
+    else if(c==="]"&&depth===0) return {items:out,closed:true};
+  }
+  return {items:out,closed:false};
+}
+function partialPlan(t){
+  const type=(/"type"\s*:\s*"(\w+)"/.exec(t)||[])[1];
+  const title=(/"title"\s*:\s*"([^"]*)"/.exec(t)||[])[1]||"";
+  let columns=[]; const cm=/"columns"\s*:\s*\[([^\]]*)\]/.exec(t); if(cm){ try{ columns=JSON.parse("["+cm[1]+"]"); }catch(e){} }
+  return sanitize({title,type,items:scanArray(t,"items").items,links:scanArray(t,"links").items,
+    columns,rows:scanArray(t,"rows").items,steps:[{say:"x",focus:[]}]});
+}
+
+/* ---------- prepared topics: these draw instantly, no model needed ---------- */
+const N=(id,label,x,y,detail,tint="")=>({id,label,x,y,w:150,h:54,detail,tint});
+const L=(from,to,label="")=>({from,to,label});
+const S=(say,...focus)=>({say,focus});
+const TOPICS=[
+{id:"heatpump",short:"Heat pump",title:"How a heat pump works",type:"diagram",
+ kw:[["heat pump",5],["refrigerant",4],["air conditioner",4],["air conditioning",4],["hvac",4],["compressor",3],["heating",2],["cooling",1]],
+ items:[N("out","Outdoor coil",20,150,"Absorbs heat from the outside air, even when it feels cold.","cold"),
+        N("comp","Compressor",275,20,"Squeezes the refrigerant gas, which makes it hot."),
+        N("inn","Indoor coil",530,150,"Releases heat into your home.","hot"),
+        N("valve","Expansion valve",275,280,"Drops the pressure so the refrigerant turns cold again.")],
+ links:[L("out","comp"),L("comp","inn"),L("inn","valve"),L("valve","out")],
+ steps:[S("Outside, a cold refrigerant soaks up heat from the air, even on a chilly day.","out"),
+        S("The compressor squeezes it, which makes it much hotter.","out","comp"),
+        S("Indoors, that hot refrigerant gives its heat to your home.","comp","inn"),
+        S("A valve drops the pressure so it turns cold again, and the loop repeats.","inn","valve","out")],
+ whatifs:[
+  {id:"summer",label:"Run it in summer",kw:["summer","cooling","reverse","cool","hot day"],patch:{reverse:"all",tint:{out:"hot",inn:"cold"}},
+   steps:[S("Flip the flow and the same machine becomes an air conditioner.","out","comp","inn","valve"),
+          S("Now the indoor coil is the cold one, and the outdoor coil dumps the heat outside.","inn","out")]},
+  {id:"freeze",label:"Freezing day",kw:["freezing","winter","colder","cold day","snow"],patch:{speed:0.45},
+   steps:[S("On a freezing day there is less heat outside to grab.","out"),
+          S("The compressor has to work harder, so each unit of electricity moves less heat.","comp")]}]},
+
+{id:"liion",short:"Li-ion cell",title:"Inside a lithium-ion cell",type:"diagram",
+ kw:[["lithium",4],["li-ion",5],["li ion",5],["anode",4],["cathode",4],["battery cell",4],["battery",2],["separator",3],["electrolyte",3]],
+ items:[N("an","Anode (graphite)",20,120,"Stores lithium ions when the cell is charged."),
+        N("sep","Separator",275,120,"A thin porous film that lets ions pass but keeps the two sides apart."),
+        N("ca","Cathode (metal oxide)",530,120,"Takes in lithium ions as the cell discharges."),
+        N("ext","External circuit",275,290,"Where your phone or motor sits. Electrons do the work here.")],
+ links:[L("an","sep","Li⁺"),L("sep","ca","Li⁺"),L("an","ext","e⁻"),L("ext","ca","e⁻")],
+ steps:[S("While you use the battery, lithium ions travel from the anode through the separator to the cathode.","an","sep","ca"),
+        S("Their electrons can't cross the separator, so they take the outside route and power your device.","an","ext","ca"),
+        S("The separator keeps the two sides apart, which makes it the main safety layer.","sep")],
+ whatifs:[
+  {id:"charge",label:"Charge it",kw:["charge","charging","recharge","plug"],patch:{reverse:"all",relabel:{ext:"Charger"}},
+   steps:[S("A charger pushes the electrons back, and the ions return to the anode.","ext","an"),
+          S("Charging stores energy by moving the ions back uphill.","an","sep","ca")]},
+  {id:"fast",label:"Fast charge",kw:["fast","fast charging","fast charge","rapid","quick","hot"],patch:{reverse:"all",relabel:{ext:"Fast charger"},speed:2.6,tint:{an:"hot"}},
+   steps:[S("Fast charging forces ions in quickly, and that makes heat.","an"),
+          S("Charge too fast, especially when cold, and lithium metal can plate onto the anode, so the battery management system limits the current.","an","ext")]}]},
+
+{id:"ev",short:"EV drivetrain",title:"How an electric car moves",type:"diagram",
+ kw:[["electric car",5],["electric vehicle",5],["ev",4],["regenerative",4],["regen",4],["drivetrain",4],["powertrain",4],["inverter",3],["traction motor",4],["tesla",2]],
+ items:[N("bat","Battery pack",20,120,"Stores energy as high-voltage direct current."),
+        N("inv","Inverter",275,120,"Turns DC into AC and sets how fast the motor spins."),
+        N("mot","Electric motor",530,120,"Turns electric current into torque."),
+        N("gear","Reduction gear",530,290,"A single-speed gear that slows the motor to wheel speed."),
+        N("whl","Wheels",275,290,"Where the torque finally becomes motion.")],
+ links:[L("bat","inv","DC"),L("inv","mot","AC"),L("mot","gear"),L("gear","whl")],
+ steps:[S("The battery supplies high-voltage direct current.","bat"),
+        S("The inverter turns it into alternating current and controls how fast the motor spins.","bat","inv","mot"),
+        S("The motor's torque goes through one reduction gear to the wheels.","mot","gear","whl")],
+ whatifs:[
+  {id:"brake",label:"Brake",kw:["brake","braking","regen","regenerative","slow","downhill"],patch:{reverse:"all",relabel:{mot:"Motor as generator"}},
+   steps:[S("When you lift off or brake, the wheels turn the motor instead of the other way round.","whl","gear","mot"),
+          S("The motor acts as a generator, and the inverter sends that energy back into the battery.","mot","inv","bat")]},
+  {id:"floor",label:"Floor it",kw:["floor","accelerat","fast","quick","speed","power"],patch:{speed:2.8,tint:{mot:"hot",inv:"hot"}},
+   steps:[S("Flooring it asks the inverter for maximum current.","bat","inv"),
+          S("Electric motors deliver strong torque from a standstill, which is why EVs feel so quick off the line.","mot","whl")]}]},
+
+{id:"bess",short:"Grid battery",title:"A solar and battery storage system",type:"diagram",
+ kw:[["bess",5],["energy storage",5],["battery storage",5],["grid storage",5],["solar",4],["peak shaving",4],["microgrid",4],["blackout",2],["outage",2]],
+ items:[N("sun","Solar panels",20,30,"Produce DC power when the sun is up."),
+        N("pcs","Inverter (PCS)",275,30,"The power conversion system moves energy between panels, battery, site and grid."),
+        N("home","Home or factory",530,30,"The load that uses the power."),
+        N("bt","Battery racks",275,220,"Store surplus energy for later."),
+        N("grid","Grid",530,220,"The utility network.")],
+ links:[L("sun","pcs"),L("pcs","home"),L("pcs","bt"),L("pcs","grid")],
+ steps:[S("At midday, the panels produce more power than the site needs.","sun"),
+        S("The inverter sends some to the site, some into the battery racks, and the surplus to the grid.","pcs","home","bt","grid"),
+        S("Storing it means cheap daytime energy isn't wasted.","bt")],
+ whatifs:[
+  {id:"sunset",label:"Sun sets",kw:["night","sunset","evening","dark","cloud"],patch:{dead:["sun"],reverse:[["pcs","bt"]],off:[["pcs","grid"]]},
+   steps:[S("After sunset, the panels go quiet and the battery discharges through the inverter.","bt","pcs","home"),
+          S("Using stored energy when grid power is most expensive is called peak shaving.","bt","home")]},
+  {id:"outage",label:"Grid outage",kw:["outage","blackout","power cut","grid fail","grid down"],patch:{dead:["grid"]},
+   steps:[S("If the grid fails, a system built for it can disconnect and run on its own.","grid","pcs"),
+          S("Solar and battery then keep the site running, which is called islanding.","sun","bt","home")]}]},
+
+{id:"chem",short:"LFP vs NMC",title:"Two EV battery chemistries",type:"table",
+ kw:[["lfp",6],["nmc",6],["lithium iron",5],["battery chemistry",5],["chemistry",3],["cobalt",3],["nickel",3],["compare",1]],
+ columns:["What matters","LFP","NMC"],
+ rows:[{id:"r1",cells:["Energy density","Lower","Higher"]},
+       {id:"r2",cells:["Cycle life","Longer","Shorter"]},
+       {id:"r3",cells:["Cost","Lower","Higher"]},
+       {id:"r4",cells:["Thermal stability","More stable","Less stable"]},
+       {id:"r5",cells:["Cold weather","Weaker","Stronger"]},
+       {id:"r6",cells:["Key metals","Iron, phosphate","Nickel, manganese, cobalt"]}],
+ items:[],links:[],
+ steps:[S("LFP and NMC are the two chemistries you will meet most in electric vehicles.","r1","r2"),
+        S("LFP trades some energy density for longer life, lower cost and better stability.","r2","r3","r4"),
+        S("NMC packs more energy into the same space and handles the cold better.","r1","r5")],
+ whatifs:[
+  {id:"range",label:"I want maximum range",kw:["range","distance","density"],patch:{},steps:[S("For range in a compact pack, NMC's higher energy density wins.","r1","r5")]},
+  {id:"cost",label:"I want lowest cost",kw:["cost","cheap","price","afford"],patch:{},steps:[S("LFP avoids nickel and cobalt, which usually makes it the cheaper chemistry.","r3","r6")]},
+  {id:"life",label:"I want it to last",kw:["life","last","longevity","safe","safety","fire","durable"],patch:{},steps:[S("For many charge cycles and a calmer failure behaviour, LFP is the usual pick.","r2","r4")]}]},
+
+{id:"planets",short:"Planet sizes",title:"Planets by diameter",type:"bars",unit:"thousand km",
+ kw:[["planet",5],["jupiter",5],["saturn",4],["neptune",4],["uranus",4],["solar system",4],["earth",2]],
+ items:[{id:"jup",label:"Jupiter",value:143,detail:"About 143,000 km across."},
+        {id:"sat",label:"Saturn",value:120.5,detail:"About 120,500 km across, without its rings."},
+        {id:"ura",label:"Uranus",value:51.1,detail:"About 51,100 km across."},
+        {id:"nep",label:"Neptune",value:49.2,detail:"About 49,200 km across."},
+        {id:"ear",label:"Earth",value:12.7,detail:"About 12,700 km across."}],
+ links:[],rows:[],columns:[],
+ steps:[S("Jupiter is the largest planet by far, about 143 thousand kilometres across.","jup"),
+        S("Saturn comes second, and Uranus and Neptune are nearly the same size.","sat","ura","nep"),
+        S("Earth looks tiny here, at about 12.7 thousand kilometres.","ear")],
+ whatifs:[
+  {id:"where",label:"Where is Earth?",kw:["earth","where","small"],patch:{},steps:[S("Earth is only about 12,700 kilometres across.","ear"),S("Jupiter could hold more than a thousand Earths by volume.","jup","ear")]},
+  {id:"ratio",label:"Biggest vs smallest",kw:["smallest","ratio","times bigger","times wider","compare"],patch:{},steps:[S("Jupiter is about eleven times wider than Earth.","jup","ear")]}]},
+
+{id:"internet",short:"Internet history",title:"How the internet grew up",type:"timeline",
+ kw:[["internet",3],["history",3],["timeline",3],["arpanet",5],["world wide web",4],["web",1]],
+ items:[{id:"y1",label:"1969",yr:"1969",name:"ARPANET",detail:"The first message passes between two university computers."},
+        {id:"y2",label:"1971",yr:"1971",name:"Email",detail:"Ray Tomlinson sends the first networked email, using the @ sign."},
+        {id:"y3",label:"1983",yr:"1983",name:"TCP/IP",detail:"ARPANET switches to the protocols the internet still runs on."},
+        {id:"y4",label:"1991",yr:"1991",name:"The Web",detail:"Tim Berners-Lee's World Wide Web opens to the public."},
+        {id:"y5",label:"1998",yr:"1998",name:"Google",detail:"Founded, and soon search becomes the front door of the web."},
+        {id:"y6",label:"2007",yr:"2007",name:"iPhone",detail:"A pocket-sized internet changes how people use it."}],
+ links:[],rows:[],columns:[],
+ steps:[S("It began in 1969 with ARPANET, joining a handful of university computers.","y1","y2"),
+        S("In 1983 the network adopted TCP/IP, the common language the internet still speaks.","y3"),
+        S("Then the Web arrived in 1991, search in 1998, and the smartphone in 2007.","y4","y5","y6")],
+ whatifs:[]},
+
+{id:"dns",short:"DNS lookup",title:"What happens when you type a web address",type:"diagram",
+ kw:[["dns",6],["domain name",4],["ip address",4],["website load",3],["web address",3],["browser",2],["url",2]],
+ items:[N("br","Your browser",20,150,"Needs the numeric address behind the name you typed."),
+        N("res","DNS resolver",275,20,"A helper that looks names up for you and remembers recent answers."),
+        N("ns","Name server",530,20,"The server in charge of that domain, which knows its real address."),
+        N("web","Web server",530,280,"Hosts the actual page.")],
+ links:[L("br","res","name?"),L("res","ns","ask"),L("br","web","connect")],
+ steps:[S("Your browser first asks a DNS resolver which address matches the name you typed.","br","res"),
+        S("If the resolver doesn't know, it asks the name servers in charge of that domain.","res","ns"),
+        S("Armed with the IP address, your browser connects straight to the web server.","br","web")],
+ whatifs:[
+  {id:"cached",label:"Visit it again",kw:["cache","cached","again","repeat","second time"],patch:{off:[["res","ns"]],dead:["ns"]},
+   steps:[S("On a repeat visit the resolver already has the answer cached.","br","res"),
+          S("So it never asks the name server, which is part of why repeat visits feel faster.","res","web")]}]}
+];
+
+/* ---------- routing a question to a prepared topic ---------- */
+function tokens(q){ return q.toLowerCase().replace(/[^a-z0-9\s+-]/g," ").split(/\s+/).filter(Boolean); }
+function score(q,kws){
+  const low=" "+q.toLowerCase().replace(/[^a-z0-9\s+-]/g," ")+" ", toks=tokens(q); let s=0;
+  for(const [k,w] of kws){
+    if(k.includes(" ")){ if(low.includes(" "+k)) s+=w; }
+    else if(toks.some(t=>t===k||(k.length>=5&&t.startsWith(k)))) s+=w;
+  }
+  return s;
+}
+function route(q){
+  let best=null,bs=0;
+  for(const t of TOPICS){ const s=score(q,t.kw); if(s>bs){bs=s;best=t;} }
+  if(!best||bs<2) return null;
+  let wf=null,ws=0;
+  for(const w of best.whatifs||[]){
+    const s=score(q,w.kw.map(k=>[k,1]));
+    if(s>ws){ws=s;wf=w.id;}
+  }
+  return {topic:best,whatif:wf};
+}
+function applyPatch(plan,patch){
+  patch=patch||{};
+  const items=(plan.items||[]).map(i=>({...i,
+    label:(patch.relabel&&patch.relabel[i.id])||i.label,
+    tint:(patch.tint&&i.id in patch.tint)?patch.tint[i.id]:(i.tint||""),
+    dead:!!(patch.dead&&patch.dead.includes(i.id))}));
+  let links=(plan.links||[]).map(l=>({...l}));
+  if(patch.reverse==="all") links=links.map(l=>({...l,from:l.to,to:l.from}));
+  else if(patch.reverse) links=links.map(l=>patch.reverse.some(([a,b])=>a===l.from&&b===l.to)?({...l,from:l.to,to:l.from}):l);
+  if(patch.off) links=links.map(l=>patch.off.some(([a,b])=>(a===l.from&&b===l.to)||(a===l.to&&b===l.from))?({...l,dead:true}):l);
+  const dead=id=>{ const it=items.find(i=>i.id===id); return it&&it.dead; };
+  links=links.map(l=>({...l,dead:!!l.dead||dead(l.from)||dead(l.to)}));
+  return {...plan,items,links,speed:patch.speed||1};
+}
+const STOP=new Set("what why how does do is are the an of to in on for and or with about can could would should its this that these those from into your you my me we they be been being was were will just like tell explain please".split(" "));
+function mindmapPlan(q){
+  const words=[...new Set(tokens(q).filter(w=>w.length>=4&&!STOP.has(w)))].slice(0,4);
+  const ranked=TOPICS.map(t=>({t,s:score(q,t.kw)})).sort((a,b)=>b.s-a.s).slice(0,2).map(x=>x.t);
+  const items=[{id:"q",label:q.length>34?q.slice(0,33)+"…":q,detail:"Your question."}], links=[];
+  words.forEach((w,i)=>{ items.push({id:"w"+i,label:w,detail:"A key word in your question: "+w+"."}); links.push({from:"q",to:"w"+i,label:""}); });
+  ranked.forEach((t,i)=>{ items.push({id:"t"+i,label:t.short,topic:t.id,detail:"Tap to open this topic."}); links.push({from:"q",to:"t"+i,label:"closest"}); });
+  return {title:"How I read your question",type:"diagram",items,links,columns:[],rows:[],
+    steps:[{say:"That one isn't in my prepared set, so here is how I read your question.",focus:["q"]},
+           {say:words.length?"I picked out "+words.join(", ")+" as the key words.":"I couldn't find clear key words in that.",focus:["q",...words.map((_,i)=>"w"+i)]},
+           {say:"These are the closest topics I can draw instantly. Tap one.",focus:["q",...ranked.map((_,i)=>"t"+i)]}]};
+}
+
+function cleanQuery(q){ const t=tokens(q).filter(w=>!STOP.has(w)).join(" "); return t||q.trim(); }
+function chunkText(text){
+  const parts=text.match(/[^.!?;:,]+[.!?;:,]*\s*/g)||[text], out=[]; let cur="";
+  for(const p of parts){ if((cur+p).length>150&&cur){ out.push(cur.trim()); cur=p; } else cur+=p; }
+  if(cur.trim()) out.push(cur.trim());
+  return out;
+}
+function sentencesOf(t){
+  return (t.replace(/\s+/g," ").match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g)||[t]).map(x=>x.trim()).filter(Boolean);
+}
+function introLinks(html,self){
+  const out=[], seen=new Set([String(self).toLowerCase()]);
+  const re=/<a href="\/wiki\/([^"#?]+)[^"]*"[^>]*>(.*?)<\/a>/g; let m;
+  while((m=re.exec(html))&&out.length<6){
+    let t; try{ t=decodeURIComponent(m[1]).replace(/_/g," "); }catch(e){ continue; }
+    const text=m[2].replace(/<[^>]*>/g,"").trim();
+    if(t.includes(":")||text.length<3||text.length>26||seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase()); out.push({title:t,text});
+  }
+  return out;
+}
+function buildWikiPlan(sum,links){
+  const title=str(sum.title)||"Topic", extract=str(sum.extract);
+  const sents=sentencesOf(extract||title), steps=[]; let cur="";
+  for(const s of sents){
+    if(steps.length>=4) break;
+    if((cur+" "+s).trim().length>230&&cur){ steps.push(cur); cur=s; } else cur=(cur+" "+s).trim();
+  }
+  if(cur&&steps.length<4) steps.push(cur);
+  const url=sum.content_urls&&sum.content_urls.desktop?sum.content_urls.desktop.page:"";
+  const base={title,url,columns:[],rows:[]};
+  if(links.length>=2){
+    const cx=330, cy=200, rx=300, ry=165, n=links.length;
+    const items=[{id:"c",label:title,detail:str(sum.description)||sents[0],x:cx-75,y:cy-27,w:150,h:54}];
+    const lk=[];
+    links.forEach((l,i)=>{
+      const a=-Math.PI/2+i*2*Math.PI/n;
+      items.push({id:"l"+i,label:l.text,detail:"Tap to explore "+l.title+".",wiki:l.title,
+        x:Math.round(cx+rx*Math.cos(a)-75),y:Math.round(cy+ry*Math.sin(a)-27),w:150,h:54});
+      lk.push({from:"c",to:"l"+i,label:""});
+    });
+    const st=steps.map(say=>{ const low=say.toLowerCase(), f=["c"]; links.forEach((l,i)=>{ if(low.includes(l.text.toLowerCase())) f.push("l"+i); }); return {say,focus:f}; });
+    st.push({say:"Tap any connected idea to keep exploring.",focus:items.slice(1).map(i=>i.id)});
+    return {...base,type:"diagram",items,links:lk,steps:st};
+  }
+  const items=steps.map((s,i)=>({id:"p"+i,label:"Point "+(i+1),detail:s}));
+  return {...base,type:"cards",items,links:[],steps:steps.map((say,i)=>({say,focus:["p"+i]}))};
+}
+/*LOGIC_END*/
+
+/* ---------- page plumbing ---------- */
+const PROXY_URL="/ask"; // set to "/ask" when the page is served by the Worker, which holds the key
+
+const $=id=>document.getElementById(id);
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS="http://www.w3.org/2000/svg";
+const synth=window.speechSynthesis;
+let runId=0, sound=false, soundTouched=false, sample=null, engineRun=null, engineName="", engineLabel="", cur=null, lastPlan=null, REG={}, EDGES=[], CTX="";
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function h(tag,cls,text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+function sv(tag,attrs){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function wrap(text,max=18,lines=2){
+  const words=text.split(/\s+/), out=[]; let c="";
+  for(const w of words){ if((c+" "+w).trim().length>max&&c){ out.push(c); c=w; } else c=(c+" "+w).trim(); }
+  if(c) out.push(c);
+  if(out.length>lines){ out.length=lines; out[lines-1]=out[lines-1].slice(0,max-1)+"…"; }
+  return out;
+}
+function setNote(t,warn){ const n=$("note"); n.textContent=t||""; n.classList.toggle("warn",!!warn); }
+
+/* ---------- speech out ---------- */
+let voices=[];
+function prefGet(){ try{ return localStorage.getItem("voiceName")||""; }catch(e){ return ""; } }
+function prefSet(v){ try{ localStorage.setItem("voiceName",v); }catch(e){} }
+function loadVoices(){
+  voices=(synth?synth.getVoices():[]).filter(v=>/^en/i.test(v.lang));
+  const sel=$("voice"); const saved=prefGet();
+  sel.innerHTML=""; const auto=document.createElement("option"); auto.value=""; auto.textContent="Voice: automatic"; sel.appendChild(auto);
+  voices.forEach(v=>{ const o=document.createElement("option"); o.value=v.name; o.textContent=v.name+" ("+v.lang+(v.localService?"":", online")+")"; sel.appendChild(o); });
+  sel.value=saved&&voices.some(v=>v.name===saved)?saved:"";
+}
+function pickVoice(){
+  const want=prefGet(); const chosen=voices.find(v=>v.name===want); if(chosen) return chosen;
+  return voices.find(v=>v.localService&&/en-(IN|GB|US)/i.test(v.lang))||voices.find(v=>v.localService)||voices[0]||null;
+}
+function speakOne(text){
+  return new Promise(res=>{
+    try{
+      const u=new SpeechSynthesisUtterance(text), v=pickVoice();
+      if(v){ u.voice=v; u.lang=v.lang; } else u.lang="en-US";
+      u.rate=0.98; u.pitch=1; u.volume=1;
+      const t=setTimeout(res,Math.max(4000,text.length*130));
+      u.onend=u.onerror=()=>{ clearTimeout(t); res(); };
+      synth.resume(); synth.speak(u);
+    }catch(e){ res(); }
+  });
+}
+async function speak(text){
+  if(!synth) return; const mine=runId;
+  for(const c of chunkText(text)){ if(mine!==runId) return; await speakOne(c); }
+}
+async function narrate(text){
+  const need=600+text.length*34, t0=performance.now();
+  if(sound&&synth) await speak(text);
+  const el=performance.now()-t0;
+  if(el<need*0.5) await sleep(need-el);
+}
+function updateSoundBtn(){ const b=$("sound"); b.textContent=sound?"Sound on":"Sound off"; b.setAttribute("aria-pressed",String(sound)); }
+function userKick(){ if(!soundTouched&&synth){ sound=true; updateSoundBtn(); } }
+
+/* ---------- drawing ---------- */
+function register(id,el,it){
+  el.classList.add("el");
+  el.tabIndex=0;
+  const go=()=>onItem(it);
+  el.addEventListener("click",go);
+  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  (REG[id]=REG[id]||[]).push(el);
+}
+function layout(items,links){
+  const W=150,H=54,GX=100,GY=34, pos={};
+  if(items.every(i=>Number.isFinite(i.x)&&Number.isFinite(i.y))){
+    items.forEach(i=>pos[i.id]={x:i.x,y:i.y,w:i.w||W,h:i.h||H}); return pos;
+  }
+  const lvl={};
+  if(links.length){
+    items.forEach(i=>lvl[i.id]=0);
+    for(let k=0;k<items.length;k++){
+      let ch=false;
+      for(const l of links){ if(lvl[l.to]<lvl[l.from]+1&&lvl[l.from]+1<items.length){ lvl[l.to]=lvl[l.from]+1; ch=true; } }
+      if(!ch) break;
+    }
+  } else items.forEach((i,ix)=>lvl[i.id]=ix%3);
+  const cols={}; items.forEach(i=>(cols[lvl[i.id]]=cols[lvl[i.id]]||[]).push(i));
+  const keys=Object.keys(cols).map(Number).sort((a,b)=>a-b);
+  const maxRows=Math.max(...keys.map(k=>cols[k].length)), height=maxRows*(H+GY)-GY;
+  keys.forEach((k,ci)=>{
+    const col=cols[k], off=(height-(col.length*(H+GY)-GY))/2;
+    col.forEach((it,ri)=>pos[it.id]={x:ci*(W+GX),y:off+ri*(H+GY),w:W,h:H});
+  });
+  return pos;
+}
+function anchor(a,b){
+  const ac={x:a.x+a.w/2,y:a.y+a.h/2}, bc={x:b.x+b.w/2,y:b.y+b.h/2}, dx=bc.x-ac.x, dy=bc.y-ac.y;
+  const t=Math.min((a.w/2+5)/Math.abs(dx||1e-6),(a.h/2+5)/Math.abs(dy||1e-6));
+  return {x:ac.x+dx*t,y:ac.y+dy*t};
+}
+function renderDiagram(p){
+  const pos=layout(p.items,p.links), ids=Object.keys(pos);
+  const minX=Math.min(...ids.map(i=>pos[i].x)), minY=Math.min(...ids.map(i=>pos[i].y));
+  const maxX=Math.max(...ids.map(i=>pos[i].x+pos[i].w)), maxY=Math.max(...ids.map(i=>pos[i].y+pos[i].h));
+  const svg=sv("svg",{viewBox:`${minX-16} ${minY-16} ${maxX-minX+32} ${maxY-minY+32}`,role:"img","aria-label":p.title});
+  svg.innerHTML='<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker></defs>';
+  const speed=p.speed||1;
+  p.links.forEach((l,ix)=>{
+    const a=pos[l.from], b=pos[l.to]; if(!a||!b) return;
+    const p1=anchor(a,b), p2=anchor(b,a);
+    const line=sv("line",{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,pathLength:1,class:"edge"+(l.dead?" dead":""),"marker-end":"url(#arr)"});
+    line.style.setProperty("--d",(0.25+ix*0.12)+"s"); svg.appendChild(line);
+    let dot=null;
+    if(!RM&&!l.dead){
+      const len=Math.hypot(p2.x-p1.x,p2.y-p1.y), dur=(len/(80*speed)).toFixed(2);
+      dot=sv("circle",{r:4,class:"dot"});
+      dot.appendChild(sv("animateMotion",{dur:dur+"s",repeatCount:"indefinite",path:`M${p1.x} ${p1.y} L${p2.x} ${p2.y}`,begin:(Math.random()*1.2).toFixed(2)+"s"}));
+      svg.appendChild(dot);
+    }
+    EDGES.push({a:l.from,b:l.to,el:line,dot});
+    if(l.label){ const t=sv("text",{x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2-6,class:"elabel"}); t.textContent=l.label; svg.appendChild(t); }
+  });
+  p.items.forEach((it,ix)=>{
+    const q=pos[it.id], g=sv("g",{class:"node "+(it.tint||"")+(it.dead?" dead":"")});
+    g.style.setProperty("--d",(ix*0.1)+"s");
+    g.appendChild(sv("rect",{x:q.x,y:q.y,width:q.w,height:q.h,rx:10}));
+    const lines=wrap(it.label), t=sv("text",{});
+    lines.forEach((ln,i)=>{ const s=sv("tspan",{x:q.x+q.w/2,y:q.y+q.h/2+(i-(lines.length-1)/2)*17+5}); s.textContent=ln; t.appendChild(s); });
+    g.appendChild(t);
+    register(it.id,g,it); svg.appendChild(g);
+  });
+  return svg;
+}
+function renderCards(p){
+  const g=h("div","grid");
+  p.items.forEach((it,ix)=>{
+    const t=h("div","tile"); t.style.animationDelay=(ix*0.07)+"s"; t.appendChild(h("b",null,it.label));
+    if(it.detail) t.appendChild(h("span",null,it.detail)); register(it.id,t,it); g.appendChild(t);
+  });
+  return g;
+}
+function renderTable(p){
+  const t=h("table"); const cols=p.columns||[];
+  if(cols.length){ const tr=h("tr"); cols.forEach(c=>tr.appendChild(h("th",null,c))); const th=h("thead"); th.appendChild(tr); t.appendChild(th); }
+  const tb=h("tbody");
+  p.rows.forEach((r,ix)=>{
+    const tr=h("tr"); tr.style.animationDelay=(ix*0.08)+"s"; r.cells.forEach(c=>tr.appendChild(h("td",null,c)));
+    const detail=r.cells.map((c,i)=>i&&cols[i]?cols[i]+" "+c.toLowerCase():c).join(". ");
+    register(r.id,tr,{id:r.id,label:r.cells[0],detail}); tb.appendChild(tr);
+  });
+  t.appendChild(tb); return t;
+}
+function renderTimeline(p){
+  const w=h("div","tl");
+  p.items.forEach((it,ix)=>{
+    const row=h("div","tl-item"); row.style.setProperty("--d",(ix*0.1)+"s");
+    row.appendChild(h("div","yr",it.yr||String(ix+1)));
+    const body=h("div"); body.appendChild(h("b",null,it.name||it.label)); if(it.detail) body.appendChild(h("small",null,it.detail));
+    row.appendChild(body); register(it.id,row,it); w.appendChild(row);
+  });
+  return w;
+}
+function renderBars(p){
+  const w=h("div"); w.style.display="grid"; w.style.gap="6px";
+  const max=Math.max(1,...p.items.map(i=>i.value||0));
+  p.items.forEach(it=>{
+    const row=h("div","bar-row"); row.appendChild(h("div",null,it.label));
+    const tr=h("div","bar-track"), f=h("div","bar-fill"); f.style.width="0%"; tr.appendChild(f); row.appendChild(tr);
+    row.appendChild(h("div","bar-val",it.value==null?"":it.value+(p.unit?"":"")));
+    register(it.id,row,it); w.appendChild(row);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ f.style.width=((it.value||0)/max*100)+"%"; }));
+  });
+  if(p.unit) w.appendChild(h("div","bar-val","Diameter in "+p.unit));
+  return w;
+}
+function render(plan){
+  REG={}; EDGES=[]; CTX=plan.title; lastPlan=plan;
+  $("stageTitle").textContent=plan.title;
+  const stage=$("stage"); stage.classList.remove("dim"); stage.innerHTML="";
+  const fn={diagram:renderDiagram,table:renderTable,cards:renderCards,timeline:renderTimeline,bars:renderBars}[plan.type]||renderCards;
+  stage.appendChild(fn(plan));
+}
+function highlight(ids){
+  const set=new Set(ids||[]);
+  $("stage").classList.toggle("dim",set.size>0);
+  for(const id in REG) REG[id].forEach(el=>el.classList.toggle("on",set.has(id)));
+  EDGES.forEach(e=>{ const on=set.has(e.a)&&set.has(e.b); e.el.classList.toggle("on",on); if(e.dot) e.dot.classList.toggle("on",on); });
+}
+
+/* ---------- playing a plan ---------- */
+async function playSteps(steps,my){
+  for(const s of steps){
+    if(my!==runId) return false;
+    highlight(s.focus||[]); $("caption").textContent=s.say;
+    await narrate(s.say);
+  }
+  if(my!==runId) return false;
+  setTimeout(()=>{ if(my===runId) highlight([]); },900);
+  return true;
+}
+function buildTopics(){
+  const box=$("topics"); box.innerHTML="";
+  TOPICS.forEach(t=>{
+    const b=h("button","chip",t.short); b.type="button"; b.dataset.id=t.id;
+    b.addEventListener("click",()=>{ userKick(); showTopic(t.id); });
+    box.appendChild(b);
+  });
+}
+function markTopic(id){ document.querySelectorAll("#topics .chip").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.id===id))); }
+function buildWhatifs(topic,active,pulse){
+  const wrapEl=$("whatwrap"), box=$("whatifs"), hint=$("hint");
+  box.innerHTML=""; hint.hidden=true;
+  if(!topic){ wrapEl.hidden=true; return; }
+  if(!topic.whatifs||!topic.whatifs.length){
+    wrapEl.hidden=true; hint.hidden=false; hint.textContent="Tap any item in the drawing to hear about it."; return;
+  }
+  wrapEl.hidden=false;
+  const mk=(label,id)=>{
+    const b=h("button","chip",label); b.type="button"; b.setAttribute("aria-pressed",String(active===id));
+    b.addEventListener("click",()=>{ userKick(); showTopic(topic.id,{whatif:id}); });
+    box.appendChild(b); return b;
+  };
+  if(topic.type==="diagram") mk("Original",null);
+  const first=[];
+  topic.whatifs.forEach(w=>first.push(mk(w.label,w.id)));
+  if(pulse&&first[0]&&!active) first[0].classList.add("pulse");
+}
+async function showTopic(id,{whatif=null,limit=null,pulse=false}={}){
+  const my=++runId; if(synth) synth.cancel();
+  const t=TOPICS.find(x=>x.id===id); cur={id,whatif};
+  const wf=whatif?t.whatifs.find(w=>w.id===whatif):null;
+  $("kind").textContent="Prepared topic"; markTopic(id); setNote("");
+  render(applyPatch(t,wf?wf.patch:null)); buildWhatifs(t,whatif,pulse);
+  const steps=wf?wf.steps:t.steps;
+  return playSteps(limit?steps.slice(0,limit):steps,my);
+}
+function onItem(it){
+  if(it.wiki){ userKick(); showWiki(it.wiki,false); return; }
+  if(it.topic){ userKick(); showTopic(it.topic); return; }
+  if(!it.detail&&engineRun){ userKick(); viaClaude("Tell me more about "+it.label+" in the context of "+CTX+"."); return; }
+  userKick();
+  const my=++runId; if(synth) synth.cancel();
+  highlight([it.id]); const text=it.detail||it.label; $("caption").textContent=text;
+  narrate(text).then(()=>{ if(my===runId) setTimeout(()=>highlight([]),700); });
+}
+
+/* ---------- live Claude path ---------- */
+function claudeErr(e){
+  const c=e&&e.code; let m;
+  if(c==="not_granted") m="Claude wasn't allowed to answer from this page. Reload and choose Allow when asked.";
+  else if(c==="sampling_disabled") m="Claude isn't available for this account.";
+  else if(c==="rate_limited") m="Claude is busy right now. Try again in a minute.";
+  else if(c==="session_expired") m="Please sign in to Claude again.";
+  else if(c==="http_429") m="Lots of people are asking at once. Try again in a few seconds.";
+  else if(c==="http_401") m="That API key was rejected. Press the key button to enter it again.";
+  else m="Couldn't get an answer just now.";
+  const why=c||(e&&e.message)||"";
+  return m+" Showing the closest prepared topics instead."+(why?" ("+why+")":"");
+}
+async function streamPlay(my,run){
+  let text="",rendered=false,valid=new Set(),queued=0,finished=false,wake=null; const queue=[];
+  const notify=()=>{ if(wake){ const w=wake; wake=null; w(); } };
+  const pushStep=s=>{
+    const say=str(s&&s.say); if(!say) return;
+    queue.push({say,focus:(Array.isArray(s.focus)?s.focus:[]).map(str).filter(f=>valid.has(f))}); notify();
+  };
+  const doRender=plan=>{ render(plan); valid=new Set([...plan.items.map(i=>i.id),...plan.rows.map(r=>r.id)]); rendered=true; };
+  const consumer=(async()=>{
+    let i=0;
+    while(my===runId){
+      if(i<queue.length){ const st=queue[i++]; highlight(st.focus); $("caption").textContent=st.say; await narrate(st.say); }
+      else if(finished) break;
+      else await new Promise(r=>{ wake=r; });
+    }
+  })();
+  const update=()=>{
+    if(!rendered){
+      if(!/"steps"\s*:\s*\[/.test(text)) return;
+      const part=partialPlan(text); if(!part) return;
+      doRender(part);
+    }
+    const sc=scanArray(text,"steps").items;
+    while(queued<sc.length){ pushStep(sc[queued]); queued++; }
+  };
+  const feed=t=>{ if(my!==runId) return; text=t; update(); };
+  let failure=null, finalText="";
+  try{ finalText=await run(feed); }catch(e){ failure=e; }
+  if(my!==runId){ finished=true; notify(); await consumer; return true; }
+  if(finalText) text=finalText;
+  let final=null; try{ final=sanitize(parseModel(text)); }catch(e){}
+  if(!rendered){
+    if(!final){ finished=true; notify(); await consumer; if(failure) throw failure; return false; }
+    doRender(final); final.steps.forEach(pushStep);
+  } else if(final){ lastPlan=final; final.steps.slice(queued).forEach(pushStep); }
+  finished=true; notify(); await consumer;
+  if(my===runId) setTimeout(()=>{ if(my===runId) highlight([]); },900);
+  return true;
+}
+async function viaClaude(q){
+  const my=++runId; if(synth) synth.cancel(); cur=null; markTopic(null); buildWhatifs(null);
+  $("kind").textContent=engineLabel||"Drawing live"; $("caption").textContent="Thinking…"; setNote("");
+  $("stageTitle").textContent=q.length>60?q.slice(0,59)+"…":q; $("stage").innerHTML="";
+  try{
+    const ok=await streamPlay(my,feed=>engineRun(q,feed));
+    if(!ok) throw new Error("empty reply");
+    if(my===runId){ $("hint").hidden=false; $("hint").textContent="Tap any item in the drawing to dig deeper."; }
+    return true;
+  }catch(e){
+    console.warn(e); if(my!==runId) return true;
+    setNote(claudeErr(e),true); return false;
+  }
+}
+/* ---------- Wikipedia: any topic, instantly, no key ---------- */
+const WIKI="https://en.wikipedia.org";
+async function wj(url){ const r=await fetch(url); if(!r.ok) throw new Error("Wikipedia answered "+r.status); return r.json(); }
+async function wikiFind(q){
+  const cleaned=cleanQuery(q);
+  const question=/\?|^\s*(why|how|what|when|where|who|which|explain|tell|define)\b/i.test(q);
+  const bySearch=async t=>{
+    const d=await wj(`${WIKI}/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(t)}&srlimit=1&format=json&origin=*`);
+    return d.query&&d.query.search&&d.query.search[0]?d.query.search[0].title:null;
+  };
+  const byTitle=async t=>{
+    const d=await wj(`${WIKI}/w/api.php?action=opensearch&search=${encodeURIComponent(t)}&limit=1&namespace=0&redirects=resolve&format=json&origin=*`);
+    return d[1]&&d[1][0]?d[1][0]:null;
+  };
+  const order=question?[bySearch,byTitle]:[byTitle,bySearch];
+  for(const f of order) for(const t of [...new Set([cleaned,q])]){ const r=await f(t); if(r) return r; }
+  return null;
+}
+async function wikiPlan(title){
+  const [sum,intro]=await Promise.all([
+    wj(`${WIKI}/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g,"_"))}`),
+    wj(`${WIKI}/w/api.php?action=parse&page=${encodeURIComponent(title)}&section=0&prop=text&redirects=1&format=json&origin=*`).catch(()=>null)]);
+  const html=intro&&intro.parse&&intro.parse.text?(intro.parse.text["*"]||""):"";
+  return buildWikiPlan(sum,introLinks(html,sum.title||title));
+}
+async function showWiki(input,isQuery){
+  const my=++runId; if(synth) synth.cancel(); cur=null; markTopic(null); buildWhatifs(null);
+  $("kind").textContent="From Wikipedia"; $("caption").textContent="Looking that up…"; setNote("");
+  $("stageTitle").textContent=input.length>60?input.slice(0,59)+"…":input; $("stage").innerHTML=""; $("hint").hidden=true;
+  try{
+    const title=isQuery?await wikiFind(input):input;
+    if(my!==runId) return true;
+    if(!title){ setNote("Wikipedia has no page for that, so here is the closest match.",true); return false; }
+    const plan=await wikiPlan(title);
+    if(my!==runId) return true;
+    render(plan);
+    const hint=$("hint"); hint.hidden=false; hint.textContent="Tap a connected idea to keep exploring. ";
+    if(plan.url){ const a=h("a",null,"Read more on Wikipedia"); a.href=plan.url; a.target="_blank"; a.rel="noopener"; hint.appendChild(a); }
+    await playSteps(plan.steps,my);
+    return true;
+  }catch(e){
+    console.warn(e); if(my===runId) setNote("Couldn't reach Wikipedia ("+(e.message||e)+"). Check your internet connection.",true);
+    return false;
+  }
+}
+function fallbackMap(q){
+  const my=++runId; if(synth) synth.cancel();
+  const plan=mindmapPlan(q); $("kind").textContent="Closest match"; cur=null; markTopic(null); buildWhatifs(null);
+  render(plan); playSteps(plan.steps,my);
+}
+async function answer(q){
+  const r=route(q);
+  if(r){ await showTopic(r.topic.id,{whatif:r.whatif}); return; }
+  if(window.claude){ if(engineRun&&await viaClaude(q)) return; }
+  else{ if(engineRun&&await viaClaude(q)) return; if(await showWiki(q,true)) return; }
+  fallbackMap(q);
+}
+
+/* ---------- controls ---------- */
+$("ask").addEventListener("submit",e=>{
+  e.preventDefault(); const q=$("q").value.trim(); if(!q) return;
+  $("q").value=""; userKick(); answer(q);
+});
+$("sound").addEventListener("click",()=>{
+  soundTouched=true; sound=!sound; updateSoundBtn();
+  if(!sound&&synth) synth.cancel();
+  if(sound&&synth&&$("caption").textContent) speak($("caption").textContent);
+});
+$("replay").addEventListener("click",()=>{
+  userKick();
+  if(cur&&cur.id) showTopic(cur.id,{whatif:cur.whatif});
+  else if(lastPlan){ const my=++runId; if(synth) synth.cancel(); render(lastPlan); playSteps(lastPlan.steps,my); }
+});
+
+/* microphone: only shown where this page is allowed to use it (for example when opened locally in Chrome) */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function micAllowed(){
+  try{ const pp=document.permissionsPolicy||document.featurePolicy; return !!(SR&&pp&&pp.allowsFeature&&pp.allowsFeature("microphone")); }
+  catch(e){ return false; }
+}
+if(micAllowed()){
+  const mic=$("mic"); mic.hidden=false; let listening=false, rec=null;
+  mic.addEventListener("click",async()=>{
+    if(listening&&rec){ rec.stop(); return; }
+    userKick(); runId++; if(synth) synth.cancel();
+    rec=new SR(); rec.lang="en-IN"; rec.interimResults=true; let fin="",interim="";
+    rec.onstart=()=>{ listening=true; mic.textContent="Listening… tap to finish"; };
+    rec.onresult=e=>{ fin="";interim=""; for(let i=0;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) fin+=r[0].transcript; else interim+=r[0].transcript; } $("q").value=fin||interim; };
+    rec.onerror=e=>{ if(e.error!=="aborted") setNote("Mic problem: "+e.error+". You can type instead.",true); };
+    rec.onend=()=>{ listening=false; mic.textContent="Speak"; const q=(fin||interim).trim(); $("q").value=""; if(q) answer(q); };
+    try{ rec.start(); }catch(e){ setNote("Couldn't start the mic. You can type instead.",true); }
+  });
+}
+
+$("voice").addEventListener("change",e=>{ prefSet(e.target.value); });
+$("testvoice").addEventListener("click",()=>{
+  soundTouched=true; sound=true; updateSoundBtn(); runId++; if(synth) synth.cancel();
+  speak("This is how I sound. If you can hear this clearly, you are all set.");
+});
+if(synth){ synth.onvoiceschanged=loadVoices; }
+loadVoices(); setTimeout(loadVoices,600); setTimeout(loadVoices,2000);
+
+/* ---------- boot ---------- */
+async function intro(){
+  const t=TOPICS[0];
+  let alive=await showTopic(t.id,{limit:2,pulse:true});
+  if(!alive) return;
+  alive=await showTopic(t.id,{whatif:"summer",limit:1,pulse:true});
+  if(!alive) return;
+  $("caption").textContent="Your turn. Tap a change on the right, pick a topic, or ask anything.";
+}
+buildTopics(); updateSoundBtn();
+function setEngineNote(){
+  let t;
+  if(window.claude) t=engineRun
+    ? "Questions outside the prepared topics are drawn live by Claude. Claude asks your permission the first time."
+    : "Claude isn't available in this view, so questions outside the prepared topics show the closest match.";
+  else if(engineName==="Cloud") t="Any question is answered live by Claude. Prepared topics are instant.";
+  else if(engineName==="Claude API") t="Any question is answered by Claude using your API key.";
+  else if(engineName==="On-device") t="Any question is answered by the on-device model. Wikipedia is the backup.";
+  else t="Loading a model so any question can be answered. Until it is ready, topics come from Wikipedia.";
+  $("engine").textContent=t;
+}
+(async()=>{
+  let s=null;
+  try{ if(window.claude&&window.claude.use) s=await window.claude.use("sample"); }catch(e){ s=null; }
+  if(s){
+    sample=s; engineName="Claude"; engineLabel="Drawing live with Claude";
+    engineRun=async(q,feed)=>{
+      const r=await sample(SYSTEM+"\n\nQuestion: "+q,{modelTier:"quick",onText:({text})=>feed(text)});
+      return r.text;
+    };
+  } else if(PROXY_URL&&!window.claude){ startProxy();
+  } else if(!window.claude&&/^https?:/.test(location.protocol)){
+    $("keybtn").hidden=false;
+    const isLocal=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    let k=""; try{ k=localStorage.getItem("anthropic_key")||""; }catch(e){}
+    if(k) startKey(); else if(isLocal) startSmart(); else $("smart").hidden=false;
+  }
+  setEngineNote();
+})();
+async function readSSE(r,feed){
+  const reader=r.body.getReader(), dec=new TextDecoder(); let buf="", acc="";
+  for(;;){
+    const {done,value}=await reader.read(); if(done) break;
+    buf+=dec.decode(value,{stream:true}); const lines=buf.split("\n"); buf=lines.pop();
+    for(const ln of lines){
+      if(!ln.startsWith("data:")) continue;
+      try{ const j=JSON.parse(ln.slice(5)); if(j.type==="content_block_delta"&&j.delta&&j.delta.text){ acc+=j.delta.text; feed(acc); } }catch(e){}
+    }
+  }
+  return acc;
+}
+async function startProxy(){
+  engineName="Cloud"; engineLabel="Drawing live with Claude";
+  $("keybtn").hidden=true; $("smart").hidden=true;
+  engineRun=async(q,feed)=>{
+    const r=await fetch(PROXY_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({q})});
+    if(!r.ok){ const err=new Error("Relay error "+r.status); err.code="http_"+r.status; throw err; }
+    return readSSE(r,feed);
+  };
+  setEngineNote();
+}
+async function startSmart(){
+  const b=$("smart"); b.disabled=true; b.hidden=true; setNote("");
+  try{
+    $("engine").textContent="Loading the on-device model library…";
+    let mod=null; const failed=[];
+    for(const url of ["https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm","https://esm.sh/@mlc-ai/web-llm","https://esm.run/@mlc-ai/web-llm"]){
+      try{ mod=await import(url); break; }catch(e){ failed.push(new URL(url).host); }
+    }
+    if(!mod) throw new Error("Couldn't download the model library from "+failed.join(", ")+".");
+    if(!navigator.gpu) throw new Error("This browser has no WebGPU. Use recent desktop Chrome or Edge.");
+    const cfg=mod.prebuiltAppConfig;
+    const id=["Qwen2.5-1.5B-Instruct-q4f16_1-MLC","Llama-3.2-1B-Instruct-q4f16_1-MLC"].find(i=>cfg.model_list.some(m=>m.model_id===i));
+    if(!id) throw new Error("No supported model in this library version.");
+    const eng=await mod.CreateMLCEngine(id,{initProgressCallback:r=>{ $("engine").textContent="Loading the on-device model: "+Math.round((r.progress||0)*100)+"% (Wikipedia answers meanwhile)"; }});
+    try{ await eng.chat.completions.create({messages:[{role:"user",content:"hi"}],max_tokens:1}); }catch(e){}
+    if(engineName!=="Claude API"){
+      engineName="On-device"; engineLabel="Drawing live on this device";
+      engineRun=async(q,feed)=>{
+        const chunks=await eng.chat.completions.create({messages:[{role:"system",content:SYSTEM},{role:"user",content:q}],temperature:0.4,max_tokens:1200,stream:true});
+        let acc="";
+        for await(const c of chunks){ const d=c.choices[0]&&c.choices[0].delta&&c.choices[0].delta.content; if(d){ acc+=d; feed(acc); } }
+        return acc;
+      };
+    }
+    setEngineNote(); setNote("On-device model ready. Ask any question.");
+  }catch(e){
+    console.warn(e); b.hidden=false; b.disabled=false;
+    setNote(e.message+" Wikipedia topics still work, or use an API key.",true); setEngineNote();
+  }
+}
+async function startKey(){
+  let key=""; try{ key=localStorage.getItem("anthropic_key")||""; }catch(e){}
+  if(!key){
+    key=(window.prompt("Paste your Anthropic API key. It stays in this browser and is sent only to api.anthropic.com.")||"").trim();
+    if(!key) return;
+    try{ localStorage.setItem("anthropic_key",key); }catch(e){}
+  }
+  engineName="Claude API"; engineLabel="Drawing live with Claude";
+  engineRun=async(q,feed)=>{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+      headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-haiku-5-5",max_tokens:1500,stream:true,system:SYSTEM,messages:[{role:"user",content:q}]})});
+    if(!r.ok){
+      if(r.status===401){ try{ localStorage.removeItem("anthropic_key"); }catch(e){} }
+      const err=new Error("Claude API error "+r.status); err.code="http_"+r.status; throw err;
+    }
+    return readSSE(r,feed);
+  };
+  setEngineNote(); setNote("Claude API ready. Ask any question.");
+}
+$("smart").addEventListener("click",startSmart);
+$("keybtn").addEventListener("click",startKey);
+intro();
+</script>
+
+</body>
+</html>
