@@ -2,7 +2,7 @@
 
 Ask a question out loud or by typing. The page answers in short spoken steps while it draws a diagram, table, timeline or chart and highlights the part being explained. Change something ("Run it in summer", "Brake", "Sun sets") and the drawing redraws with a new explanation.
 
-**Live demo:** https://YOUR-NAME.YOUR-ACCOUNT.workers.dev  *(replace with your deployed link)*
+**Live demo:** https://talk-to-anything.shrishti5-sb.workers.dev/
 
 No sign-up, install or API key is needed to use it.
 
